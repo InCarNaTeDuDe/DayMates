@@ -1,0 +1,22 @@
+{
+  "name": "DayMates Friendship Platform",
+  "short_name": "DayMates",
+  "description": "Activity-first friendship discovery platform to find buddies for sports, movies, chess, and learning.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=192&h=192&fit=crop&q=80",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=512&h=512&fit=crop&q=80",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

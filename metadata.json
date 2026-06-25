@@ -1,0 +1,6 @@
+{
+  "name": "DayMates",
+  "description": "Never Spend a day alone. An activity-first friendship discovery platform to find buddies for jogging, cycling, badminton, chess, study groups, and more.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
