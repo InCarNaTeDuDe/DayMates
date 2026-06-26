@@ -437,7 +437,7 @@ If you are seeing a 403 Forbidden error in your Developer Console, your current 
               </p>
 
               {/* Helpful Sandbox IFrame Notice */}
-              <div className="mx-4 mt-4 p-3 bg-amber-500/10 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 rounded-xl text-left space-y-2">
+              {/* <div className="mx-4 mt-4 p-3 bg-amber-500/10 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 rounded-xl text-left space-y-2">
                 <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-normal font-medium">
                   ⚠️ <strong>Google One Tap / 403 Forbidden Note:</strong>
                   <br />
@@ -481,7 +481,7 @@ If you are seeing a 403 Forbidden error in your Developer Console, your current 
                     </p>
                   </div>
                 </details>
-              </div>
+              </div> */}
             </div>
 
             {/* Primary OAuth action triggers */}
