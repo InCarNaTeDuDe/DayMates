@@ -3,17 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import 'reflect-metadata';
 import express from 'express';
 import path from 'path';
 import { createServer as createHttpServer } from 'http';
 import { createServer as createViteServer } from 'vite';
 import apiRouter from './src/backend/routes/api';
 import { initSocketIO } from './src/backend/sockets';
+import { db } from './src/backend/services/db';
 
 async function startServer() {
   const app = express();
   const server = createHttpServer(app);
   const PORT = 3000;
+
+  // Initialize TypeORM database
+  await db.initializeTypeORM();
 
   // JSON and URL-encoded body parsers
   app.use(express.json({ limit: '10mb' }));

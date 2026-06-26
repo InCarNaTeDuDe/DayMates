@@ -213,10 +213,10 @@ export async function verifyOtp(emailOrPhone: string, otp: string) {
   return res;
 }
 
-export async function googleSignIn(email: string, name?: string, avatar?: string) {
+export async function googleSignIn(email: string, name?: string, avatar?: string, credential?: string, mode: 'login' | 'register' = 'login') {
   const res = await apiFetch('/api/auth/google', {
     method: 'POST',
-    body: JSON.stringify({ email, name, avatar })
+    body: JSON.stringify({ email, name, avatar, credential, mode })
   });
 
   localStorage.setItem('ab_access_token', res.accessToken);
@@ -230,6 +230,10 @@ export async function googleSignIn(email: string, name?: string, avatar?: string
 
   initSocketConnection(res.accessToken);
   return res;
+}
+
+export async function fetchGoogleConfig(): Promise<{ clientId: string }> {
+  return apiFetch('/api/auth/google/config');
 }
 
 export async function fetchCurrentUser() {

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+"use client";
+
 import { useState, useEffect } from 'react';
 import { fetchActivities } from '../services/api';
 import { Activity, ActivityCategory } from '../shared/types';
@@ -129,12 +131,21 @@ export default function Dashboard({ currentUserId, onSelectActivity, onOpenCreat
 
       {/* Welcome Banner */}
       <div className="p-6 sm:p-8 rounded-2xl bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 shadow-sm dark:shadow-md relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6 transition-all">
-        <div className="space-y-1.5 max-w-xl">
-          <div className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border border-sky-500/10">
+        <div className="space-y-3.5 max-w-xl">
+          <div className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border border-sky-500/15">
             <Sparkles className="h-3 w-3" /> friendship discovery platform
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold font-display tracking-tight text-slate-900 dark:text-white">Find your buddy for activities!</h2>
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+          
+          {/* Daily connection quote widget */}
+          <div className="border-l-2 border-teal-500 pl-3 py-1.5 bg-slate-50 dark:bg-slate-950/60 rounded-r-xl my-2">
+            <p className="text-xs italic text-slate-700 dark:text-teal-300 font-medium leading-relaxed">
+              "Happiness is only real when shared. Step out, connect, and let today be the start of a brand new adventure with like-minded friends!"
+            </p>
+            <p className="text-[9px] text-slate-400 dark:text-slate-500 font-mono mt-1 font-semibold uppercase tracking-wider">— Daily Spark</p>
+          </div>
+
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             Discover jogging groups, chess matches, cycling buddies, or study partners. Propose your own event or request to join existing boards below!
           </p>
         </div>
@@ -213,12 +224,15 @@ export default function Dashboard({ currentUserId, onSelectActivity, onOpenCreat
           </button>
         </div>
       ) : filteredActivities.length === 0 ? (
-        <div className="py-20 text-center bg-slate-900/20 border border-slate-850/60 rounded-2xl flex flex-col items-center">
-          <Calendar className="h-10 h-10 text-slate-600 mb-3.5" />
-          <h4 className="text-md font-bold text-white font-display mb-1">No activities found</h4>
-          <p className="text-xs text-slate-500 max-w-xs leading-relaxed mb-6">
-            We couldn't find any matching activity boards right now. Why not proposed one yourself?
+        <div className="py-20 text-center bg-slate-100/60 dark:bg-slate-900/20 border border-slate-200/60 dark:border-slate-850/60 rounded-2xl flex flex-col items-center px-4 animate-fade-in">
+          <Calendar className="h-10 w-10 text-slate-400 dark:text-slate-600 mb-3.5" />
+          <h4 className="text-md font-bold text-slate-900 dark:text-white font-display mb-1.5">No activities found</h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed mb-5">
+            We couldn't find any matching activity boards right now. Why not propose one yourself and spark a new friendship?
           </p>
+          <div className="bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 max-w-md p-4 rounded-xl border border-sky-100/50 dark:border-sky-950/50 text-xs italic mb-6 shadow-sm">
+            "A single conversation across the table with a new buddy is better than ten years’ mere study of books. Step out today!"
+          </div>
           <button
             onClick={onOpenCreateModal}
             className="px-4 py-2 bg-slate-800 text-white rounded-xl border border-slate-750 hover:bg-slate-705 transition-colors cursor-pointer text-xs font-semibold flex items-center gap-1"

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+"use client";
+
 import { useState, useEffect } from 'react';
 import { fetchNotifications, markNotificationsRead, respondJoinRequest } from '../services/api';
 import { Notification } from '../shared/types';

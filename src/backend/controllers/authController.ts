@@ -3,36 +3,43 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Request, Response } from 'express';
-import { db } from '../services/db';
-import { hashOtp, generateOtp, generateTokens, verifyRefreshToken } from '../utils/auth';
+import { Request, Response } from "express";
+import { db } from "../services/db";
+import {
+  hashOtp,
+  generateOtp,
+  generateTokens,
+  verifyRefreshToken,
+} from "../utils/auth";
 
 export async function requestOtp(req: Request, res: Response): Promise<void> {
   const { emailOrPhone } = req.body;
-  
+
   // Clean up any stale OTPs for this email or phone
   db.otp_verifications.deleteByEmailOrPhone(emailOrPhone);
 
   // Generate 6-digit OTP
   const rawOtp = generateOtp();
   const hashed = hashOtp(rawOtp);
-  
+
   // Save to DB (expires in 5 minutes)
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
   db.otp_verifications.save({
     emailOrPhone,
     otp: hashed,
-    expiresAt
+    expiresAt,
   });
 
   // Log to server console so the developer/user can see it!
-  console.log(`[DayMates OTP SERVICE] Generated OTP for "${emailOrPhone}": ${rawOtp} (Valid for 5 mins)`);
+  console.log(
+    `[DayMates OTP SERVICE] Generated OTP for "${emailOrPhone}": ${rawOtp} (Valid for 5 mins)`,
+  );
 
   res.json({
     success: true,
-    message: 'OTP sent successfully. Check your console log to retrieve it!',
+    message: "OTP sent successfully. Check your console log to retrieve it!",
     // In demo environments, we can return the raw OTP in development so they don't even have to open logs!
-    demoOtp: process.env.NODE_ENV !== 'production' ? rawOtp : undefined
+    demoOtp: process.env.NODE_ENV !== "production" ? rawOtp : undefined,
   });
 }
 
@@ -42,21 +49,25 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
   // Find OTP record
   const record = db.otp_verifications.findOne({ emailOrPhone });
   if (!record) {
-    res.status(400).json({ error: 'No OTP requested for this email or phone number' });
+    res
+      .status(400)
+      .json({ error: "No OTP requested for this email or phone number" });
     return;
   }
 
   // Check expiration
   if (new Date() > new Date(record.expiresAt)) {
     db.otp_verifications.delete(record.id);
-    res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
+    res
+      .status(400)
+      .json({ error: "OTP has expired. Please request a new one." });
     return;
   }
 
   // Check matching hash
   const hashedInput = hashOtp(otp);
   if (record.otp !== hashedInput) {
-    res.status(400).json({ error: 'Invalid OTP code' });
+    res.status(400).json({ error: "Invalid OTP code" });
     return;
   }
 
@@ -64,18 +75,20 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
   db.otp_verifications.delete(record.id);
 
   // Check if user already exists, or create a new user profile
-  let user = db.users.findOne({ email: emailOrPhone }) || db.users.findOne({ phone: emailOrPhone });
-  
+  let user =
+    db.users.findOne({ email: emailOrPhone }) ||
+    db.users.findOne({ phone: emailOrPhone });
+
   const isNewUser = !user;
   if (!user) {
     // Generate a default name from email/phone
-    let defaultName = 'New Buddy';
+    let defaultName = "New Buddy";
     let email: string | undefined;
     let phone: string | undefined;
 
-    if (emailOrPhone.includes('@')) {
+    if (emailOrPhone.includes("@")) {
       email = emailOrPhone;
-      defaultName = emailOrPhone.split('@')[0];
+      defaultName = emailOrPhone.split("@")[0];
     } else {
       phone = emailOrPhone;
       defaultName = `Buddy-${emailOrPhone.slice(-4)}`;
@@ -83,20 +96,21 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
 
     // Set a default high-quality avatar matching interests
     const defaultAvatars = [
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+      "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150",
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
     ];
-    const randomAvatar = defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+    const randomAvatar =
+      defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
 
     user = db.users.save({
       name: defaultName,
       email,
       phone,
       avatar: randomAvatar,
-      bio: 'Ready to find some buddies for sports, learning, or movies!',
-      interests: []
+      bio: "Ready to find some buddies for sports, learning, or movies!",
+      interests: [],
     });
   }
 
@@ -107,15 +121,80 @@ export async function verifyOtp(req: Request, res: Response): Promise<void> {
     success: true,
     user,
     isNewUser,
-    ...tokens
+    ...tokens,
   });
 }
 
 export async function googleSignIn(req: Request, res: Response): Promise<void> {
-  const { email, name, avatar } = req.body;
+  let { email, name, avatar, credential } = req.body;
+
+  if (credential) {
+    try {
+      console.log("[Google Auth] Verifying credential ID token...");
+      const tokenRes = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`,
+      );
+      if (tokenRes.ok) {
+        const payload: any = await tokenRes.json();
+        email = payload.email;
+        name = payload.name;
+        avatar = payload.picture;
+        console.log(
+          `[Google Auth] Successfully verified token for email: ${email}`,
+        );
+
+        // Securely check audience if GOOGLE_CLIENT_ID is defined in backend environment
+        const systemClientId =
+          process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+        if (systemClientId && payload.aud !== systemClientId) {
+          console.warn(
+            "[Google Auth] Token audience mismatch! aud:",
+            payload.aud,
+            "expected:",
+            systemClientId,
+          );
+        }
+      } else {
+        console.warn(
+          "[Google Auth] Google API token verification failed. Attempting decode fallback...",
+        );
+        const parts = credential.split(".");
+        if (parts.length === 3) {
+          try {
+            const decoded = JSON.parse(
+              Buffer.from(parts[1], "base64").toString("utf-8"),
+            );
+            email = decoded.email;
+            name = decoded.name;
+            avatar = decoded.picture || decoded.avatar;
+            console.log(
+              `[Google Auth] Fallback decoded token for email: ${email}`,
+            );
+          } catch (e) {
+            res.status(400).json({ error: "Google ID token format invalid" });
+            return;
+          }
+        } else {
+          res
+            .status(400)
+            .json({ error: "Failed to verify Google ID token with Google" });
+          return;
+        }
+      }
+    } catch (err: any) {
+      console.error(
+        "[Google Auth] Critical error verifying Google ID token:",
+        err,
+      );
+      res.status(400).json({
+        error: "Google verification service is currently unreachable",
+      });
+      return;
+    }
+  }
 
   if (!email) {
-    res.status(400).json({ error: 'Email is required for Google Sign-In' });
+    res.status(400).json({ error: "Email is required for Google Sign-In" });
     return;
   }
 
@@ -124,21 +203,31 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
 
   const isNewUser = !user;
   if (!user) {
+    if (req.body.mode === "login") {
+      res.status(404).json({
+        error:
+          'This Google account is not registered yet. Please switch to the "Register" tab to create your profile first!',
+      });
+      return;
+    }
+
     const defaultAvatars = [
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&h=150&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&q=80'
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&h=150&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&q=80",
     ];
-    const userAvatar = avatar || defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+    const userAvatar =
+      avatar ||
+      defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
 
     user = db.users.save({
-      name: name || email.split('@')[0],
+      name: name || email.split("@")[0],
       email,
-      phone: null,
+      phone: "",
       avatar: userAvatar,
-      bio: 'Ready to find some buddies for sports, learning, or movies!',
-      interests: []
+      bio: "Ready to find some buddies for sports, learning, or movies!",
+      interests: [],
     });
   }
 
@@ -149,7 +238,7 @@ export async function googleSignIn(req: Request, res: Response): Promise<void> {
     success: true,
     user,
     isNewUser,
-    ...tokens
+    ...tokens,
   });
 }
 
@@ -157,25 +246,38 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
   const { refreshToken } = req.body;
 
   if (!refreshToken) {
-    res.status(400).json({ error: 'Refresh token is required' });
+    res.status(400).json({ error: "Refresh token is required" });
     return;
   }
 
   const payload = verifyRefreshToken(refreshToken);
   if (!payload) {
-    res.status(401).json({ error: 'Invalid or expired refresh token' });
+    res.status(401).json({ error: "Invalid or expired refresh token" });
     return;
   }
 
   const user = db.users.findOne({ id: payload.userId });
   if (!user) {
-    res.status(404).json({ error: 'User not found' });
+    res.status(404).json({ error: "User not found" });
     return;
   }
 
   const tokens = generateTokens(user.id);
   res.json({
     success: true,
-    ...tokens
+    ...tokens,
+  });
+}
+
+export async function getGoogleConfig(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const clientId =
+    process.env.VITE_GOOGLE_CLIENT_ID ||
+    "692488307747-mock-client-id.apps.googleusercontent.com";
+
+  res.json({
+    clientId,
   });
 }

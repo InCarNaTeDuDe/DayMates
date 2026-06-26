@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { requestOtp, verifyOtp, refreshToken, googleSignIn } from '../controllers/authController';
+import { requestOtp, verifyOtp, refreshToken, googleSignIn, getGoogleConfig } from '../controllers/authController';
 import { getMe, updateProfile } from '../controllers/userController';
 import { 
   createActivity, 
@@ -36,6 +36,7 @@ const router = Router();
 // AUTH ROUTES
 router.post('/auth/otp/request', sanitizePayload, validateRequest(RequestOtpSchema), requestOtp);
 router.post('/auth/otp/verify', sanitizePayload, validateRequest(VerifyOtpSchema), verifyOtp);
+router.get('/auth/google/config', getGoogleConfig);
 router.post('/auth/google', googleSignIn);
 router.post('/auth/refresh', refreshToken);
 

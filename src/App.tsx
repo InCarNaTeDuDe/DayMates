@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+"use client";
+
+import { useState, useEffect, Suspense } from 'react';
 import { subscribeState, fetchCurrentUser, logout, fetchNotifications } from './services/api';
 import { User } from './shared/types';
 import LoginView from './components/LoginView';
@@ -99,7 +101,18 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <LoginView onLoginSuccess={() => setActiveView('discover')} />;
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center font-sans">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-sky-500 to-teal-500 flex items-center justify-center shadow shadow-sky-500/15 mb-4 animate-bounce">
+            <Handshake className="h-5 w-5 text-white" />
+          </div>
+          <h1 className="text-md font-bold font-display text-slate-900 dark:text-white tracking-wide animate-pulse">Syncing Google Identity...</h1>
+        </div>
+      }>
+        <LoginView onLoginSuccess={() => setActiveView('discover')} />
+      </Suspense>
+    );
   }
 
   return (

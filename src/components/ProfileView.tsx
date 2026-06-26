@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+"use client";
+
 import React, { useState } from 'react';
 import { updateProfile } from '../services/api';
 import { User } from '../shared/types';
@@ -110,32 +112,21 @@ export default function ProfileView({ user, onUpdate }: ProfileViewProps) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Avatar Preset List */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
-            Select Avatar Profile Picture
-          </label>
-          <div className="flex flex-wrap items-center gap-3">
-            {PRESET_AVATARS.map((avUrl) => {
-              const isSelected = avatar === avUrl;
-              return (
-                <button
-                  key={avUrl}
-                  type="button"
-                  onClick={() => setAvatar(avUrl)}
-                  className={`relative h-14 w-14 rounded-full overflow-hidden border-2 cursor-pointer transition-all ${
-                    isSelected ? 'border-sky-500 scale-105 shadow-md shadow-sky-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
-                  }`}
-                >
-                  <img src={avUrl} alt="Preset avatar" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                  {isSelected && (
-                    <div className="absolute inset-0 bg-sky-500/10 flex items-center justify-center">
-                      <Sparkles className="h-4 w-4 text-sky-400" />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
+        {/* Sync Profile Avatar Display */}
+        <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800/60 p-4 rounded-2xl animate-fade-in">
+          <img 
+            src={avatar} 
+            alt="Google synced avatar" 
+            className="h-16 w-16 rounded-full object-cover border-2 border-sky-500 shadow-md shadow-sky-500/10" 
+            referrerPolicy="no-referrer"
+          />
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200 mb-0.5">
+              Google Account Avatar
+            </label>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+              Your profile picture is securely synced from your Google account.
+            </p>
           </div>
         </div>
 

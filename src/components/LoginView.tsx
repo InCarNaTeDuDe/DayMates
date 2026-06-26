@@ -3,626 +3,600 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
-import { googleSignIn } from "../services/api";
+"use client";
+
+import { useEffect, useState, use, useTransition } from "react";
+import { googleSignIn, fetchGoogleConfig } from "../services/api";
 import {
-  ShieldAlert,
   Handshake,
-  UserCheck,
+  ChevronDown,
+  Sparkles,
+  AlertCircle,
+  CheckCircle2,
   Users,
-  Flame,
-  Heart,
-  Plus,
-  Trash2,
+  Compass,
+  Calendar,
+  ShieldCheck,
+  ArrowRight,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
 }
 
-const PRESET_GOOGLE_ACCOUNTS = [
-  {
-    email: "sophia.chen@gmail.com",
-    name: "Sophia Chen",
-    avatar:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&q=80",
-    role: "Sports Host Pro",
-  },
-  {
-    email: "alex.rivera@gmail.com",
-    name: "Alex Rivera",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&q=80",
-    role: "Chess & Study enthusiast",
-  },
-  {
-    email: "bharathmaska163@gmail.com",
-    name: "Bharath Maska",
-    avatar:
-      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&q=80",
-    role: "Bharath (Developer Persona)",
-  },
-];
+// Global promise to check Google Identity Services script load status (React 19 use() pattern)
+let gsiPromise: Promise<boolean> | null = null;
+function getGsiPromise() {
+  if (gsiPromise) return gsiPromise;
+  gsiPromise = new Promise<boolean>((resolve) => {
+    const checkGSI = () => {
+      if ((window as any).google?.accounts?.id) {
+        resolve(true);
+      } else {
+        setTimeout(checkGSI, 100);
+      }
+    };
+    checkGSI();
+  });
+  return gsiPromise;
+}
+
+// Global cached promise for fetching Google client configuration (React 19 use() pattern)
+let googleConfigPromise: Promise<{ clientId: string }> | null = null;
+function getGoogleConfigPromise() {
+  if (!googleConfigPromise) {
+    googleConfigPromise = fetchGoogleConfig();
+  }
+  return googleConfigPromise;
+}
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
-  // Toggle for Demo mode or Real Active Account Sign-In
-  const [useDemoMode, setUseDemoMode] = useState(false);
+  // Use React 19's use() hook to wait for GSI script and backend Google Config load status
+  const gsiReady = use(getGsiPromise());
+  const config = use(getGoogleConfigPromise());
+  const clientId = config?.clientId || "";
 
-  // Real active user accounts on machine stored in local storage
-  const [userAccounts, setUserAccounts] = useState<
-    { email: string; name: string; avatar: string }[]
-  >(() => {
-    const saved = localStorage.getItem("daymates_user_accounts");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch (e) {}
-    }
-    return [
-      {
-        email: "bharathmaska163@gmail.com",
-        name: "Bharath Maska",
-        avatar:
-          "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&q=80",
-      },
-    ];
-  });
-
-  const [activeAccountIndex, setActiveAccountIndex] = useState(0);
-  const realUser = userAccounts[activeAccountIndex] || userAccounts[0];
-  const [isEditingRealUser, setIsEditingRealUser] = useState(false);
-
-  // States for adding another account on system
-  const [isAddingNewAccount, setIsAddingNewAccount] = useState(false);
-  const [newAccountEmail, setNewAccountEmail] = useState("");
-  const [newAccountName, setNewAccountName] = useState("");
-
-  // Google One Tap specific state
-  const [showOneTap, setShowOneTap] = useState(true);
-  const [shakeOneTap, setShakeOneTap] = useState(false);
-  const [oneTapIsAdding, setOneTapIsAdding] = useState(false);
-  const [oneTapAddEmail, setOneTapAddEmail] = useState("");
-  const [oneTapAddName, setOneTapAddName] = useState("");
-
-  const handleAddNewAccount = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAccountEmail || !newAccountName) return;
-
-    // Create random profile avatar picture
-    const randomId = Math.floor(Math.random() * 100);
-    const avatar = `https://images.unsplash.com/photo-${1535713875000 + randomId}?w=150&h=150&fit=crop&q=80`;
-
-    const nextAccounts = [
-      ...userAccounts,
-      { email: newAccountEmail, name: newAccountName, avatar },
-    ];
-    setUserAccounts(nextAccounts);
-    localStorage.setItem(
-      "daymates_user_accounts",
-      JSON.stringify(nextAccounts),
-    );
-    setActiveAccountIndex(nextAccounts.length - 1);
-
-    // Reset inputs
-    setNewAccountEmail("");
-    setNewAccountName("");
-    setIsAddingNewAccount(false);
-  };
-
-  const handleOneTapAddAccount = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!oneTapAddEmail || !oneTapAddName) return;
-
-    const randomId = Math.floor(Math.random() * 100);
-    const avatar = `https://images.unsplash.com/photo-${1535713875000 + randomId}?w=150&h=150&fit=crop&q=80`;
-
-    const nextAccounts = [
-      ...userAccounts,
-      { email: oneTapAddEmail, name: oneTapAddName, avatar },
-    ];
-    setUserAccounts(nextAccounts);
-    localStorage.setItem(
-      "daymates_user_accounts",
-      JSON.stringify(nextAccounts),
-    );
-    setActiveAccountIndex(nextAccounts.length - 1);
-
-    setOneTapAddEmail("");
-    setOneTapAddName("");
-    setOneTapIsAdding(false);
-
-    // Auto log in with the new account
-    handleSignInWithAccount(oneTapAddEmail, oneTapAddName, avatar);
-  };
-
-  const handleDeleteAccount = (indexToDelete: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (userAccounts.length <= 1) return;
-    const nextAccounts = userAccounts.filter((_, idx) => idx !== indexToDelete);
-    setUserAccounts(nextAccounts);
-    localStorage.setItem(
-      "daymates_user_accounts",
-      JSON.stringify(nextAccounts),
-    );
-    if (activeAccountIndex >= nextAccounts.length) {
-      setActiveAccountIndex(0);
-    }
-  };
-
-  const updateRealUser = (updated: { email?: string; name?: string }) => {
-    const nextAccounts = [...userAccounts];
-    nextAccounts[activeAccountIndex] = { ...realUser, ...updated };
-    setUserAccounts(nextAccounts);
-    localStorage.setItem(
-      "daymates_user_accounts",
-      JSON.stringify(nextAccounts),
-    );
-  };
-
-  // Demo selections
-  const [selectedDemoAccount, setSelectedDemoAccount] = useState(
-    PRESET_GOOGLE_ACCOUNTS[2],
-  );
-
-  // Status states
+  // Use state for tracking active tab & errors (where needed)
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [showRegisterPrompt, setShowRegisterPrompt] = useState(false);
 
-  const handleGoogleLogin = async () => {
-    setError(null);
-    setLoading(true);
+  // Use React 19's useTransition to handle pending states without manual useState
+  const [isPending, startTransition] = useTransition();
+
+  // Render or re-render GSI elements when gsiReady, clientId or activeTab changes
+  useEffect(() => {
+    if (!gsiReady || !clientId) return;
+
     try {
-      const targetUser = useDemoMode ? selectedDemoAccount : realUser;
-      await googleSignIn(targetUser.email, targetUser.name, targetUser.avatar);
-      onLoginSuccess();
-    } catch (err: any) {
-      setError(err.message || "Google Sign-In failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+      (window as any).google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleCredentialResponse,
+        auto_select: false,
+        cancel_on_tap_outside: false,
+        use_fedcm: true, // Enable Google's recommended modern protocol for secure federated credential retrieval
+        error_callback: (err: any) => {
+          console.error("[Google GSI Global Initialization Error]:", err);
+        },
+      });
 
-  const handleSignInWithAccount = async (
-    email: string,
-    name: string,
-    avatar: string,
-  ) => {
-    setError(null);
-    setLoading(true);
-    try {
-      await googleSignIn(email, name, avatar);
-      onLoginSuccess();
-    } catch (err: any) {
-      setError(err.message || "Google Sign-In failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLoginClick = () => {
-    if (useDemoMode) {
-      handleGoogleLogin();
-    } else {
-      if (!showOneTap) {
-        setShowOneTap(true);
-      } else {
-        setShakeOneTap(true);
-        setTimeout(() => setShakeOneTap(false), 500);
+      // Render official Google Sign-In button based on state
+      const btnContainer = document.getElementById("google-signin-button");
+      if (btnContainer) {
+        btnContainer.innerHTML = ""; // Clean up previous
+        (window as any).google.accounts.id.renderButton(btnContainer, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: activeTab === "register" ? "signup_with" : "signin_with",
+          shape: "pill",
+          width: "100%",
+        });
       }
+
+      // Automatically prompt One Tap for instant login
+      if (activeTab === "login") {
+        (window as any).google.accounts.id.prompt((notification: any) => {
+          const status = notification.getMomentType();
+          console.log("[Google One Tap Diagnostic Log] status:", status);
+          if (notification.isNotDisplayed()) {
+            console.warn(
+              "[Google One Tap Diagnostic] Not displayed. Reason:",
+              notification.getNotDisplayedReason(),
+            );
+          } else if (notification.isSkipped()) {
+            console.warn(
+              "[Google One Tap Diagnostic] Skipped. Reason:",
+              notification.getSkippedReason(),
+            );
+          } else if (notification.isDismissed()) {
+            console.warn(
+              "[Google One Tap Diagnostic] Dismissed. Reason:",
+              notification.getDismissedReason(),
+            );
+          }
+        });
+      }
+    } catch (err: any) {
+      console.error("[Google GIS Error]", err);
+    }
+  }, [gsiReady, clientId, activeTab]);
+
+  const handleCredentialResponse = (response: any) => {
+    setError(null);
+    setShowRegisterPrompt(false);
+
+    // Run sign-in process inside React 19 transition
+    startTransition(async () => {
+      try {
+        console.log(
+          `[Google Login] Received credential for mode: ${activeTab}`,
+        );
+        await googleSignIn("", "", "", response.credential, activeTab);
+        onLoginSuccess();
+      } catch (err: any) {
+        // If they tried logging in but account was not found
+        if (
+          err.message &&
+          err.message.toLowerCase().includes("not registered")
+        ) {
+          setShowRegisterPrompt(true);
+          setError(
+            'Google account not found! You are not registered yet. Please switch to the "Register" tab to build your profile.',
+          );
+        } else {
+          setError(err.message || "Google Authentication failed");
+        }
+      }
+    });
+  };
+
+  // Safe developer bypass/mock token generator for quick workspace testing
+  // Utilizes React 19 Action handler style
+  const handleDeveloperBypass = (formData: FormData) => {
+    const email =
+      (formData.get("email") as string) || "bharathmaska163@gmail.com";
+    const name = (formData.get("name") as string) || "Bharath Maska";
+
+    setError(null);
+    setShowRegisterPrompt(false);
+
+    startTransition(async () => {
+      try {
+        // Simulate real JWT token payload structure for Google Credential
+        const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+        const payload = btoa(
+          JSON.stringify({
+            email,
+            name,
+            picture: `https://images.unsplash.com/photo-${1535713875002 - Math.floor(Math.random() * 100)}?w=150&h=150&fit=crop&q=80`,
+            iss: "https://accounts.google.com",
+            aud: clientId,
+            exp: Math.floor(Date.now() / 1000) + 3600,
+          }),
+        );
+        const mockCredential = `${header}.${payload}.mocksignature`;
+
+        // Trigger sign-in action with current mode (login / register)
+        await googleSignIn(email, name, "", mockCredential, activeTab);
+        onLoginSuccess();
+      } catch (err: any) {
+        if (
+          err.message &&
+          err.message.toLowerCase().includes("not registered")
+        ) {
+          setShowRegisterPrompt(true);
+          setError(
+            'Developer account not found! This email is not registered. Please switch to "Register" to create your profile.',
+          );
+        } else {
+          setError(err.message || "Developer bypass sign in failed");
+        }
+      }
+    });
+  };
+
+  const triggerOneTapPromptManual = () => {
+    setError(null);
+    setShowRegisterPrompt(false);
+    if ((window as any).google?.accounts?.id) {
+      (window as any).google.accounts.id.prompt((notification: any) => {
+        if (notification.isNotDisplayed()) {
+          const reason = notification.getNotDisplayedReason() || "suppressed";
+          setError(`Google One Tap was skipped or blocked by browser/domain constraints (Google reason: "${reason}"). 
+
+If you are seeing a 403 Forbidden error in your Developer Console, your current domain is not authorized. Please make sure to add your current domain (both Development and Shared App URLs) to the "Authorized JavaScript Origins" in your Google Cloud Console credentials! Otherwise, use the Developer Sandbox below to sign in instantly.`);
+        }
+      });
+    } else {
+      setError(
+        "Google Identity Services SDK is still loading. Please wait a moment.",
+      );
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 md:p-10 font-sans transition-colors duration-300 relative overflow-hidden">
-      {/* Custom Styles for simulated Google One Tap shake animations */}
-      <style>{`
-        @keyframes one-tap-shake {
-          0%, 100% { transform: translateX(0); }
-          15%, 45%, 75% { transform: translateX(-6px); }
-          30%, 60%, 90% { transform: translateX(6px); }
-        }
-        .animate-one-tap-shake {
-          animation: one-tap-shake 0.45s cubic-bezier(.36,.07,.19,.97) both;
-        }
-      `}</style>
-
-      {/* Floating Google One Tap Dialog */}
-      {!useDemoMode && showOneTap && (
-        <div
-          className={`fixed top-4 right-4 z-50 w-full max-w-[340px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl p-4 transition-all duration-300 transform sm:mr-4 ${
-            shakeOneTap
-              ? "animate-one-tap-shake border-sky-500/80 dark:border-sky-500/80 shadow-sky-500/10"
-              : "translate-y-0 scale-100"
-          }`}
-        >
-          {/* One Tap Header */}
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/60 pb-3 mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center shrink-0 shadow-sm border border-slate-100 dark:border-slate-850">
-                <svg className="h-4.5 w-4.5" viewBox="0 0 24 24">
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.48 14.98 1 12 1 7.35 1 3.39 3.65 1.5 7.5l3.86 3C6.35 7.4 8.97 5.04 12 5.04z"
-                  />
-                  <path
-                    fill="#4285F4"
-                    d="M23.49 12.27c0-.81-.07-1.59-.2-2.36H12v4.51h6.46c-.29 1.48-1.14 2.73-2.4 3.58l3.76 2.91c2.2-2.03 3.67-5.01 3.67-8.64z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.36 14.5c-.25-.75-.39-1.55-.39-2.38s.14-1.63.39-2.38L1.5 6.74C.54 8.63 0 10.75 0 13s.54 4.37 1.5 6.26l3.86-3.76z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.76-2.91c-1.1.74-2.5 1.18-4.2 1.18-3.03 0-5.65-2.36-6.64-5.46L1.5 16.58C3.39 20.35 7.35 23 12 23z"
-                  />
-                </svg>
-              </div>
-              <div className="text-left">
-                <h3 className="text-xs font-bold text-slate-800 dark:text-white">
-                  Sign in with Google
-                </h3>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-                  to DayMates
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowOneTap(false)}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              <svg
-                className="h-3.5 w-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2.5}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          {/* One Tap Body */}
-          {oneTapIsAdding ? (
-            /* Add Secondary Account inside One Tap Overlay */
-            <form
-              onSubmit={handleOneTapAddAccount}
-              className="space-y-3 text-left animate-fade-in py-1"
-            >
-              <span className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Add Google Account
-              </span>
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-                  Google Email Address
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={oneTapAddEmail}
-                  onChange={(e) => setOneTapAddEmail(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-450 outline-none transition-all"
-                  placeholder="your-other-account@gmail.com"
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={oneTapAddName}
-                  onChange={(e) => setOneTapAddName(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-450 outline-none transition-all"
-                  placeholder="e.g. Bharath Maska"
-                />
-              </div>
-              <div className="flex items-center gap-2 pt-1.5">
-                <button
-                  type="submit"
-                  className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] rounded-lg transition-colors cursor-pointer"
-                >
-                  Add & Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOneTapIsAdding(false)}
-                  className="px-2.5 py-1.5 text-[11px] text-slate-500 hover:text-slate-750 dark:text-slate-400 dark:hover:text-slate-300 font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : (
-            /* Accounts List (Google Chooser) */
-            <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-              {userAccounts.map((acc, index) => (
-                <button
-                  key={acc.email}
-                  onClick={() =>
-                    handleSignInWithAccount(acc.email, acc.name, acc.avatar)
-                  }
-                  disabled={loading}
-                  className="w-full p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center justify-between text-left transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-800 group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <img
-                      src={acc.avatar}
-                      alt={acc.name}
-                      className="h-8.5 w-8.5 rounded-full object-cover border border-slate-200 dark:border-slate-850 shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="min-w-0">
-                      <span className="block text-xs font-bold text-slate-800 dark:text-white truncate group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
-                        {acc.name}
-                      </span>
-                      <span className="block text-[9px] text-slate-400 dark:text-slate-500 font-mono truncate">
-                        {acc.email}
-                      </span>
-                    </div>
-                  </div>
-                  <div
-                    className="flex items-center gap-1.5"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {userAccounts.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteAccount(index, e)}
-                        className="text-slate-400 hover:text-red-500 p-1 rounded hover:bg-red-500/5 transition-colors shrink-0 cursor-pointer"
-                        title="Remove account from list"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </button>
-              ))}
-
-              <button
-                onClick={() => setOneTapIsAdding(true)}
-                className="w-full py-2 border border-dashed border-slate-200 dark:border-slate-800 hover:border-sky-500/40 rounded-xl flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-450 hover:text-sky-600 dark:hover:text-sky-400 transition-colors font-medium cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Use another account</span>
-              </button>
-            </div>
-          )}
-
-          {/* One Tap Footer */}
-          <div className="border-t border-slate-100 dark:border-slate-800/60 mt-3 pt-2 text-center">
-            <p className="text-[9px] text-slate-450 dark:text-slate-500 leading-normal">
-              To test other active profiles on your browser, click{" "}
-              <strong className="font-semibold text-slate-500 dark:text-slate-400">
-                Use another account
-              </strong>{" "}
-              to add them.
-            </p>
-          </div>
-        </div>
-      )}
-      {/* Decorative ambient background glows */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-slate-200/50 via-slate-50 to-slate-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950 -z-10" />
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 md:p-10 font-sans transition-colors duration-300 relative overflow-hidden animate-fade-in">
+      {/* Ambient background glows */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-slate-200/50 via-slate-50 to-slate-50 dark:from-slate-900/60 dark:via-slate-950 dark:to-slate-950 -z-10" />
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-sky-500/5 dark:bg-sky-500/10 blur-3xl rounded-full -z-1" />
       <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-teal-500/5 dark:bg-teal-500/10 blur-3xl rounded-full -z-1" />
 
-      {/* Main Responsive Grid Container */}
-      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
-        {/* Left Column: Brand Pitch & Taglines Panel */}
-        <div className="md:col-span-7 flex flex-col justify-between bg-white/60 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl p-6 sm:p-8 md:p-10 shadow-lg backdrop-blur-md transition-all duration-300">
-          <div>
-            {/* Header / Logo */}
-            <div className="flex items-center gap-3.5 mb-6">
-              <div className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-teal-500 flex items-center justify-center shadow-lg shadow-sky-500/20">
-                <Handshake className="h-5 w-5 text-white" />
+      {/* Main Dual-Panel Layout Container */}
+      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch relative">
+        {/* Left Card: Bullet Points / How App Works (lg:col-span-5) */}
+        <div className="lg:col-span-5 flex flex-col justify-between bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white rounded-3xl p-8 shadow-2xl relative overflow-hidden border border-slate-800">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-500/10 blur-3xl rounded-full" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-teal-500/10 blur-3xl rounded-full" />
+
+          <div className="space-y-6 relative z-10">
+            {/* Branding Header */}
+            <div className="flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-sky-400 to-teal-400 flex items-center justify-center text-slate-950 font-extrabold shadow-lg shadow-sky-500/20">
+                <Handshake className="h-5 w-5" />
               </div>
-              <div>
-                <span className="text-2xl font-bold font-display tracking-tight text-slate-900 dark:text-white">
-                  DayMates
-                </span>
-                <span className="block text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">
-                  Friendship Platform
-                </span>
-              </div>
+              <span className="text-md font-extrabold tracking-tight font-display bg-gradient-to-r from-sky-400 to-teal-400 bg-clip-text text-transparent">
+                DayMates
+              </span>
             </div>
 
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-8 font-medium leading-relaxed">
-              DayMates is a simple, activity-first community. It's designed to
-              bring people together over real-life interests, hobbies, and
-              hangouts.
-            </p>
-
-            {/* Taglines lists */}
-            <div className="space-y-6">
-              <div>
-                <ul className="space-y-3 pl-1">
-                  {[
-                    "Never spend your day alone.",
-                    "Someone nearby wants to do the same thing.",
-                    "Better days start with better company.",
-                    "Life happens outside the screen.",
-                    "Got plans but nobody to go with?",
-                    "Don't cancel plans. Find company.",
-                    "Make today less lonely.",
-                    "Find mates for your day.",
-                    "Every day deserves a friend.",
-                  ].map((line, idx) => (
-                    <li
-                      key={idx}
-                      className="flex items-start gap-3 text-slate-700 dark:text-slate-300 text-[13px] font-medium leading-normal animate-fade-in"
-                      style={{ animationDelay: `${idx * 100}ms` }}
-                    >
-                      <span className="text-sky-500 dark:text-sky-400 shrink-0 mt-1 select-none text-xs">
-                        ✦
-                      </span>
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-slate-200/60 dark:border-slate-800/60 text-[11px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-semibold">
-            ✦ Activity-First Friendship • Real Connections
-          </div>
-        </div>
-
-        {/* Right Column: Dynamic One-Click Sign In panel */}
-        <div className="md:col-span-5 flex flex-col justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden transition-all duration-300">
-          <div>
-            <div className="mb-6">
-              <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">
-                Get Started
+            <div className="space-y-2">
+              <h2 className="text-2xl sm:text-3xl font-extrabold font-display leading-tight tracking-tight">
+                Never spend your day alone.
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                Sign in to meet prospective activity buddies nearby
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Connect instantly with local people who want to share
+                activities, meals, sports, or hobbies today.
               </p>
             </div>
 
-            {error && (
-              <div className="mb-6 p-4 bg-red-950/20 border border-red-800/30 rounded-xl flex items-start gap-3">
-                <ShieldAlert className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-red-600 dark:text-red-300 leading-relaxed font-medium">
-                  {error}
-                </p>
-              </div>
-            )}
-
-            {useDemoMode ? (
-              // Demo Mode - Choose a Preset Profile
-              <div className="p-4 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-850/80 space-y-3 mb-6 animate-fade-in">
-                <span className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Select Developer Persona
-                </span>
-                <div className="space-y-2">
-                  {PRESET_GOOGLE_ACCOUNTS.map((acc) => {
-                    const isSelected = selectedDemoAccount.email === acc.email;
-                    return (
-                      <button
-                        key={acc.email}
-                        type="button"
-                        onClick={() => setSelectedDemoAccount(acc)}
-                        className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                          isSelected
-                            ? "bg-sky-50 dark:bg-sky-500/10 border-sky-350 dark:border-sky-500/30 text-sky-950 dark:text-white font-bold shadow-sm"
-                            : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-800"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={acc.avatar}
-                            alt={acc.name}
-                            className="h-9 w-9 rounded-full object-cover border border-slate-200 dark:border-slate-800"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div>
-                            <span className="block text-xs font-bold text-slate-900 dark:text-white">
-                              {acc.name}
-                            </span>
-                            <span className="block text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                              {acc.email}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 shrink-0">
-                          {acc.role.split(" ")[0]}
-                        </span>
-                      </button>
-                    );
-                  })}
+            {/* Feature bullets */}
+            <div className="space-y-5 pt-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <Users className="h-4 w-4 text-sky-400" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-100">
+                    Friendship-First Community
+                  </h4>
+                  <p className="text-[11px] text-slate-400 leading-normal mt-0.5">
+                    We focus on sharing hobbies and making clean, platonic
+                    friendships. No dating stress.
+                  </p>
                 </div>
               </div>
-            ) : (
-              // Real Google Account Mode - Extremely clean, no hardcoded details shown upfront
-              <div className="py-6 flex flex-col items-center justify-center text-center space-y-3 mb-4">
-                <div className="w-14 h-14 rounded-2xl bg-sky-500/10 dark:bg-sky-500/15 flex items-center justify-center text-sky-500 dark:text-sky-400 mb-2">
-                  <svg className="h-7 w-7" viewBox="0 0 24 24">
-                    <path
-                      fill="currentColor"
-                      d="M12.24 10.285V13.4h6.86c-.277 1.56-1.602 4.585-6.86 4.585-4.54 0-8.24-3.765-8.24-8.4s3.7-8.4 8.24-8.4c2.58 0 4.307 1.095 5.298 2.045l2.465-2.37C18.28 1.845 15.54 1 12.24 1 5.865 1 .7 6.165.7 12.56s5.165 11.56 11.54 11.56c6.66 0 11.1-4.68 11.1-11.285 0-.765-.08-1.35-.18-1.85H12.24z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-xs font-bold text-slate-700 dark:text-slate-350 uppercase tracking-wider">
-                  Sign in to start matching
-                </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-[280px] leading-relaxed">
-                  Press login to open Google One Tap and select your active
-                  Google profile.
-                </p>
-              </div>
-            )}
 
-            <button
-              onClick={handleGoogleLoginClick}
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 text-slate-900 hover:text-black font-bold rounded-xl py-3.5 text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-sky-500/10 hover:shadow-sky-500/20"
-            >
-              <UserCheck className="h-5 w-5" />
-              {loading
-                ? "Connecting to Google..."
-                : useDemoMode
-                  ? `Sign In with Google (${selectedDemoAccount.name.split(" ")[0]})`
-                  : "Login with Google"}
-            </button>
-
-            {/* Demo User Switcher - Kept on Bottom as requested */}
-            <div className="mt-6 pt-4 border-t border-slate-150 dark:border-slate-800/60">
-              <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850/60 rounded-xl">
-                <div className="flex items-center gap-2.5">
-                  <Users className="h-4.5 w-4.5 text-sky-500 dark:text-sky-400" />
-                  <div>
-                    <span className="block text-xs font-bold text-slate-900 dark:text-white">
-                      Demo User Mode
-                    </span>
-                    <span className="block text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                      Switch between developer personas
-                    </span>
-                  </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <Compass className="h-4 w-4 text-teal-400" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setUseDemoMode(!useDemoMode)}
-                  className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                  style={{
-                    backgroundColor: useDemoMode
-                      ? "var(--color-sky-500, #0ea5e9)"
-                      : "#cbd5e1",
-                  }}
-                  aria-label="Toggle Demo mode"
-                >
-                  <span
-                    className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                    style={{
-                      transform: useDemoMode
-                        ? "translateX(20px)"
-                        : "translateX(0px)",
-                    }}
-                  />
-                </button>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-100">
+                    Spontaneous Real-Time Matches
+                  </h4>
+                  <p className="text-[11px] text-slate-400 leading-normal mt-0.5">
+                    Browse activities happening in your neighborhood today or
+                    post your own plans in 30 seconds.
+                  </p>
+                </div>
               </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <Calendar className="h-4 w-4 text-purple-400" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-100">
+                    Seamless Safe Meetups
+                  </h4>
+                  <p className="text-[11px] text-slate-400 leading-normal mt-0.5">
+                    Check out verified member profiles, coordinate safely via
+                    group chats, and attend with confidence.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Energetic Human Connection Quote Card */}
+            <div className="relative p-5 bg-gradient-to-r from-sky-500/10 to-teal-500/10 border border-sky-500/20 rounded-2xl my-4 animate-fade-in">
+              <div className="absolute top-2 right-3 text-sky-400/25 font-serif text-3xl">
+                “
+              </div>
+              <p className="text-[11px] italic text-sky-200 font-medium leading-relaxed">
+                "There are no strangers here; only friends you haven't met yet.
+                Step out, connect, and let today be the start of an amazing
+                shared adventure!"
+              </p>
+              <p className="text-[9px] text-teal-400 font-bold uppercase tracking-wider mt-2.5">
+                — DayMates Spark
+              </p>
             </div>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800/85 flex flex-col items-center justify-center gap-1">
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider font-bold">
-              <span>Not a Dating App</span>
-              <span className="text-slate-250 dark:text-slate-800">•</span>
-              <span>Friendship First</span>
+          <div className="pt-8 border-t border-slate-800/80 mt-8 relative z-10 flex items-center justify-between text-[11px] text-slate-500">
+            <span className="flex items-center gap-1.5 font-semibold text-slate-400">
+              <ShieldCheck className="h-4 w-4 text-sky-400" /> Trusted Platonic
+              Network
+            </span>
+            <span className="font-mono text-slate-500">v2.1.0</span>
+          </div>
+        </div>
+
+        {/* Right Card: Login/Register Form (lg:col-span-7) */}
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-2xl p-6 sm:p-8 backdrop-blur-md flex flex-col justify-between">
+          <div>
+            {/* Tabs Selector for Login / Register */}
+            <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-2xl mb-6 border border-slate-200/50 dark:border-slate-800/50 shadow-inner">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("login");
+                  setError(null);
+                  setShowRegisterPrompt(false);
+                }}
+                className={`flex-1 py-3.5 text-xs sm:text-sm font-bold tracking-wider uppercase font-display rounded-xl transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
+                  activeTab === "login"
+                    ? "bg-gradient-to-r from-sky-500 to-teal-500 text-white shadow-md shadow-sky-500/20 transform scale-[1.01] font-extrabold ring-1 ring-white/10"
+                    : "text-slate-550 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200/40 dark:hover:bg-slate-900/30"
+                }`}
+              >
+                <LogIn className="h-4 w-4" />
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("register");
+                  setError(null);
+                  setShowRegisterPrompt(false);
+                }}
+                className={`flex-1 py-3.5 text-xs sm:text-sm font-bold tracking-wider uppercase font-display rounded-xl transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
+                  activeTab === "register"
+                    ? "bg-gradient-to-r from-sky-500 to-teal-500 text-white shadow-md shadow-sky-500/20 transform scale-[1.01] font-extrabold ring-1 ring-white/10"
+                    : "text-slate-550 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-200/40 dark:hover:bg-slate-900/30"
+                }`}
+              >
+                <UserPlus className="h-4 w-4" />
+                Register / Sign Up
+              </button>
             </div>
-            <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center font-medium">
-              Find local people to share today's plans with
-            </p>
+
+            {/* Prompt Header */}
+            <div className="space-y-1.5 mb-6">
+              <h2 className="text-xl font-extrabold font-display tracking-tight text-slate-900 dark:text-white">
+                {activeTab === "login"
+                  ? "Welcome Back!"
+                  : "Create Your Account"}
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {activeTab === "login"
+                  ? "Sign in to sync your plans and check pending activities."
+                  : "Join today to host events and meet friendly local buddies."}
+              </p>
+            </div>
+
+            {/* Dynamic Alerts */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-500/10 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-2xl flex items-start gap-3 animate-fade-in">
+                <AlertCircle className="h-4.5 w-4.5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+                <div className="space-y-2">
+                  <p className="text-xs text-red-600 dark:text-red-300 font-semibold leading-relaxed">
+                    {error}
+                  </p>
+                  {showRegisterPrompt && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab("register");
+                        setError(null);
+                        setShowRegisterPrompt(false);
+                      }}
+                      className="text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1"
+                    >
+                      Switch to Register Tab <ArrowRight className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Central Auth Area with Colored Google G Brand Logo */}
+            <div className="flex flex-col items-center justify-center text-center py-6 bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850/80 rounded-2xl mb-6">
+              <div className="w-14 h-14 rounded-full bg-white dark:bg-slate-900 shadow-md border border-slate-100 dark:border-slate-800 flex items-center justify-center mb-3">
+                <svg className="h-7 w-7" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                {activeTab === "login"
+                  ? "Login with your Google Profile"
+                  : "Register with Google Profile"}
+              </h3>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 max-w-[280px] mt-1 leading-normal">
+                {activeTab === "login"
+                  ? "Access your saved circles and chats instantly using Google One Tap."
+                  : "Securely create your DayMates profile with your primary email."}
+              </p>
+
+              {/* Helpful Sandbox IFrame Notice */}
+              <div className="mx-4 mt-4 p-3 bg-amber-500/10 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 rounded-xl text-left space-y-2">
+                <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-normal font-medium">
+                  ⚠️ <strong>Google One Tap / 403 Forbidden Note:</strong>
+                  <br />
+                  If Google accounts do not load automatically, your browser
+                  domain is not authorized in your Google Cloud OAuth Client
+                  Credentials, or Chrome is blocking the Google iframe inside
+                  this AI Studio preview.
+                </p>
+
+                <details className="text-[9px] text-slate-600 dark:text-slate-400 cursor-pointer">
+                  <summary className="font-semibold text-sky-600 dark:text-sky-400 hover:underline">
+                    How to authorize your domains in Google Cloud Console
+                  </summary>
+                  <div className="mt-1.5 p-2 bg-white/60 dark:bg-slate-950/40 rounded border border-slate-200/40 dark:border-slate-800/40 space-y-1 select-text">
+                    <p className="font-bold">
+                      1. Open Google Cloud Console Credentials:
+                    </p>
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline block truncate font-medium"
+                    >
+                      https://console.cloud.google.com/apis/credentials
+                    </a>
+                    <p className="font-bold mt-1">
+                      2. Edit your OAuth 2.0 Client ID and add to "Authorized
+                      JavaScript origins":
+                    </p>
+                    <code className="block bg-slate-100 dark:bg-slate-900 p-1.5 rounded font-mono text-[8.5px] break-all text-slate-700 dark:text-slate-300">
+                      https://ais-dev-aj7bmatl56liu3zvgzeett-692488307747.asia-east1.run.app
+                    </code>
+                    <code className="block bg-slate-100 dark:bg-slate-900 p-1.5 rounded font-mono text-[8.5px] break-all text-slate-700 dark:text-slate-300">
+                      https://ais-pre-aj7bmatl56liu3zvgzeett-692488307747.asia-east1.run.app
+                    </code>
+                    <p className="font-bold mt-1">3. Test in a New Tab:</p>
+                    <p className="leading-normal">
+                      Click the <strong>Open in a new tab</strong> icon in the
+                      top right of your AI Studio preview so Google's One Tap is
+                      not blocked by nested iframe restrictions.
+                    </p>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            {/* Primary OAuth action triggers */}
+            <div className="space-y-4">
+              <button
+                onClick={triggerOneTapPromptManual}
+                disabled={isPending}
+                className="w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:bg-slate-800 dark:hover:bg-slate-100 font-bold rounded-xl py-3.5 text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-slate-900/10"
+              >
+                {isPending ? (
+                  <span className="flex items-center gap-1.5 justify-center">
+                    <svg
+                      className="animate-spin h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Processing Google Account...
+                  </span>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" viewBox="0 0 24 24">
+                      <path
+                        fill="currentColor"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                    </svg>
+                    {activeTab === "login"
+                      ? "Login with Google One Tap"
+                      : "Register with Google account"}
+                  </>
+                )}
+              </button>
+
+              {/* Official standard button fallback placeholder */}
+              <div
+                id="google-signin-button"
+                className="w-full flex justify-center py-1"
+              ></div>
+            </div>
+          </div>
+
+          {/* Dev Mode Accordion - Expanded by default for sandbox accessibility */}
+          <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-850">
+            <details
+              open
+              className="group border border-slate-200/60 dark:border-slate-800/60 rounded-xl overflow-hidden [&_summary::-webkit-details-marker]:hidden bg-slate-50/50 dark:bg-slate-950/20"
+            >
+              <summary className="flex items-center justify-between px-3.5 py-2.5 cursor-pointer select-none">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-2 group-open:text-sky-600 dark:group-open:text-sky-400 transition-colors">
+                  <Sparkles className="h-3.5 w-3.5 text-sky-500" />
+                  Developer Sandbox / Demo User Mode
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-open:rotate-180 transition-transform duration-200" />
+              </summary>
+
+              <div className="px-3.5 pb-4 pt-1.5 text-[11px] border-t border-slate-150 dark:border-slate-800 bg-white dark:bg-slate-950/60 space-y-3">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal">
+                  No Client ID configured or testing in a sandbox? Use the form
+                  below to simulate a Google JWT ID Token and login immediately.
+                </p>
+
+                {/* Form utilizing React 19 action prop */}
+                <form action={handleDeveloperBypass} className="space-y-2.5">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                      Testing Full Name
+                    </label>
+                    <input
+                      name="name"
+                      type="text"
+                      required
+                      placeholder="e.g. Bharath Maska"
+                      defaultValue="Bharath Maska"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none transition-all placeholder-slate-450 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                      Testing Email Address
+                    </label>
+                    <input
+                      name="email"
+                      type="email"
+                      required
+                      placeholder="e.g. bharathmaska163@gmail.com"
+                      defaultValue="bharathmaska163@gmail.com"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none transition-all placeholder-slate-450 font-medium"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="w-full mt-1 bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-400 hover:to-teal-400 text-slate-950 font-bold rounded-xl py-2.5 text-[11px] tracking-wide transition-all shadow-md shadow-sky-500/5 cursor-pointer"
+                  >
+                    {isPending
+                      ? "Bypassing..."
+                      : `Issue Google Token (${activeTab === "login" ? "Sign In" : "Register"})`}
+                  </button>
+                </form>
+              </div>
+            </details>
           </div>
         </div>
       </div>
